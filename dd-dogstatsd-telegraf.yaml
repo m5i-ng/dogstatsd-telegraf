@@ -1,0 +1,60 @@
+version: '3'
+services:
+  statsd_client:
+    # using statsd client, to create <prefix>.requests.incr.one.count - update prefix for naming
+    # default metric type is count, incrementing one count at 1 sec interval
+    container_name: statsd_client
+    image: "min499/statsd_cm:0.1"
+    environment:
+      - STATSD_HOST=dd-dogstatsd
+      - STATSD_PORT=8125
+      - PREFIX=mytest
+    depends_on:
+      - dd-dogstatsd
+  dd-dogstatsd:
+    container_name: dd-dogstatsd
+    image: "datadog/dogstatsd:7.45.1"
+    environment:
+    - DD_SITE=datadoghq.com
+    - DD_API_KEY=<API_KEY>
+    - DD_STATSD_FORWARD_HOST=telegraf
+    - DD_STATSD_FORWARD_PORT=8125
+    - DD_HOSTNAME=dd-ec2-test
+    - DD_LOG_LEVEL=trace
+    ## DOGSTATSD
+    - DD_DOGSTATSD_PORT=8125
+    - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true
+    # - DD_DOGSTATSD_STATS_ENABLE=true
+    # - DD_DOGSTATSD_ORIGIN_DETECTION_CLIENT=true
+    # https://github.com/DataDog/datadog-agent/blob/main/pkg/config/config_template.yaml#L705
+    - DD_ENABLE_METADATA_COLLECTION=false
+    #https://github.com/DataDog/datadog-agent/issues/11338
+    - GODEBUG=netdns=go
+    ports:
+      - 8125/udp # for Dogstatsd
+  telegraf:
+    image: telegraf:1.26
+    container_name: telegraf
+    restart: always
+    volumes:
+    - ./telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    depends_on:
+      - influxdb
+    links:
+      - influxdb
+    ports:
+    - '8125:8125'
+  influxdb:
+    image: influxdb:1.8-alpine
+    container_name: influxdb
+    restart: always
+    environment:
+      - INFLUXDB_DB=influx
+      - INFLUXDB_ADMIN_USER=admin
+      - INFLUXDB_ADMIN_PASSWORD=admin
+    ports:
+      - '8086:8086'
+    volumes:
+      - influxdb_data:/var/lib/influxdb
+volumes:
+  influxdb_data: {}
